@@ -21,15 +21,17 @@ const PORT = process.env.PORT || 3001;
 
 // ✅ CORS autorisé pour Railway Front + localhost et ton site Vercel
 const allowedOrigins = [
-    'fresh-backned-production.up.railway.app',
-//    'https://daff-telecom.vercel.app', // ✅ CORRECT sans /
-   'http://localhost:5173'
+    'https://fresh-backned-production.up.railway.app',
+    'https://fresh-app-ten.vercel.app',
+    'http://localhost:5173'
 ];
+
 
 
 // ✅ Middleware CORS propre
 app.use(cors({
   origin: function (origin, callback) {
+    console.log('CORS origin:', origin);
     if (!origin || allowedOrigins.includes(origin)) {
       callback(null, true);
     } else {
@@ -40,6 +42,7 @@ app.use(cors({
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
 }));
+
 
 // ✅ Parser JSON
 app.use(express.json());
