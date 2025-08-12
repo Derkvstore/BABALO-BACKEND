@@ -951,8 +951,8 @@ router.get('/:id/pdf', async (req, res) => {
     <div class="header-logo-container">
       <!-- 🔽 Place ton logo ici -->
       <img src="LOGO_URL_HERE" alt="Logo" />
-      <h1 color = "red" >DAFF TELECOM </h1>
-      <p style="font-size: 11px; color: #666; margin-top: 6px;">Halle de Bamako<br/>Tél: 79 79 83 77</p>
+      <h1 color = "red" > FRESHKYLA </h1>
+      <p style="font-size: 11px; color: #666; margin-top: 6px;">Halle de Bamako<br/>Tél: +223 76 83 27 73</p>
     </div>
     <div class="header-info">
       <h2>Facture</h2>
