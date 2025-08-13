@@ -21,8 +21,8 @@ const PORT = process.env.PORT || 3001;
 
 // ✅ CORS autorisé pour Railway Front + localhost et ton site Vercel
 const allowedOrigins = [
-    'https://fresh-backned-production.up.railway.app',
-    'https://fresh-app-ten.vercel.app',
+    // 'https://fresh-backned-production.up.railway.app',
+    // // 'https://fresh-app-ten.vercel.app',
     'http://localhost:5173'
 ];
 
