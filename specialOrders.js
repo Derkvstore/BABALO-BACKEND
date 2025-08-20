@@ -221,7 +221,7 @@ router.put('/:id/update-payment', async (req, res) => {
   } catch (error) {
     if (clientDb) await clientDb.query('ROLLBACK');
     console.error('Erreur lors de la mise à jour du paiement de la commande spéciale:', error);
-    res.status(500).json({ error: 'Erreur serveur lors de la mise à jour du paiement de la commande spéciale.' });
+    res.status(500).json({ error: 'Erreur serveur lors de la mise à jour du paiement de la commande spéciale contacter Derkv 😄.' });
   } finally {
     if (clientDb) clientDb.release();
   }
