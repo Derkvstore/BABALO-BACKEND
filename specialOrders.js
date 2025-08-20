@@ -1,9 +1,7 @@
-// backend/specialOrders.js
 const express = require('express');
 const router = express.Router();
-const { pool } = require('./db'); // Assurez-vous que le chemin vers db est correct
+const { pool } = require('./db');
 
-// Route pour récupérer toutes les commandes spéciales avec les noms du client et du fournisseur
 router.get('/', async (req, res) => {
   try {
     const query = `
@@ -23,10 +21,11 @@ router.get('/', async (req, res) => {
           so.statut,
           so.raison_annulation,
           so.date_statut_change,
-          so.date_statut_change AS date_vente, -- ➡️ MODIFICATION: Permet au front-end de calculer le bénéfice par date de vente
+          so.date_statut_change AS date_vente,
           c.nom AS client_nom,
           c.telephone AS client_telephone,
-          f.nom AS fournisseur_nom
+          f.nom AS fournisseur_nom,
+          f.telephone AS fournisseur_telephone
       FROM
           special_orders so
       JOIN
@@ -44,7 +43,6 @@ router.get('/', async (req, res) => {
   }
 });
 
-// Route pour créer une nouvelle commande spéciale
 router.post('/', async (req, res) => {
   const {
     client_nom,
@@ -66,11 +64,16 @@ router.post('/', async (req, res) => {
     return res.status(400).json({ error: 'Des informations obligatoires sont manquantes pour la commande spéciale.' });
   }
 
+  const parsedPrixVenteClient = parseFloat(prix_vente_client);
+  const parsedPrixAchatFournisseur = parseFloat(prix_achat_fournisseur);
+  if (parsedPrixVenteClient <= parsedPrixAchatFournisseur) {
+    return res.status(400).json({ error: 'Le prix de vente doit être supérieur au prix d\'achat.' });
+  }
+
   try {
     clientDb = await pool.connect();
     await clientDb.query('BEGIN');
 
-    // Récupérer l'ID du client
     const clientResult = await clientDb.query('SELECT id FROM clients WHERE nom = $1', [client_nom]);
     if (clientResult.rows.length === 0) {
       await clientDb.query('ROLLBACK');
@@ -78,7 +81,6 @@ router.post('/', async (req, res) => {
     }
     const clientId = clientResult.rows[0].id;
 
-    // Récupérer l'ID du fournisseur
     const fournisseurResult = await clientDb.query('SELECT id FROM fournisseurs WHERE nom = $1', [fournisseur_nom]);
     if (fournisseurResult.rows.length === 0) {
       await clientDb.query('ROLLBACK');
@@ -86,13 +88,9 @@ router.post('/', async (req, res) => {
     }
     const fournisseurId = fournisseurResult.rows[0].id;
 
-    const parsedPrixVenteClient = parseFloat(prix_vente_client);
     const parsedMontantPaye = parseFloat(montant_paye);
-
-    // Calculer le montant restant dû
     const montantRestant = parsedPrixVenteClient - parsedMontantPaye;
 
-    // Déterminer le statut initial de la commande
     let initialStatut = 'en_attente';
     if (parsedMontantPaye >= parsedPrixVenteClient) {
         initialStatut = 'vendu';
@@ -100,8 +98,6 @@ router.post('/', async (req, res) => {
         initialStatut = 'paiement_partiel';
     }
 
-
-    // Insérer la nouvelle commande spéciale
     const newOrderResult = await clientDb.query(
       `INSERT INTO special_orders (
         client_id, fournisseur_id, marque, modele, stockage, type, type_carton, imei,
@@ -109,7 +105,7 @@ router.post('/', async (req, res) => {
       ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, NOW(), $13, NOW()) RETURNING id`,
       [
         clientId, fournisseurId, marque, modele, stockage, type, type_carton, imei,
-        prix_achat_fournisseur, parsedPrixVenteClient, parsedMontantPaye, montantRestant, initialStatut
+        parsedPrixAchatFournisseur, parsedPrixVenteClient, parsedMontantPaye, montantRestant, initialStatut
       ]
     );
     const newOrderId = newOrderResult.rows[0].id;
@@ -126,7 +122,83 @@ router.post('/', async (req, res) => {
   }
 });
 
-// Route pour mettre à jour le statut d'une commande spéciale
+router.put('/:id', async (req, res) => {
+  const orderId = req.params.id;
+  const {
+    client_nom,
+    fournisseur_nom,
+    marque,
+    modele,
+    stockage,
+    type,
+    type_carton,
+    imei,
+    prix_achat_fournisseur,
+    prix_vente_client,
+    montant_paye,
+    statut,
+    raison_annulation
+  } = req.body;
+
+  let clientDb;
+  
+  try {
+    clientDb = await pool.connect();
+    await clientDb.query('BEGIN');
+
+    const clientResult = await clientDb.query('SELECT id FROM clients WHERE nom = $1', [client_nom]);
+    if (clientResult.rows.length === 0) {
+      await clientDb.query('ROLLBACK');
+      return res.status(404).json({ error: `Client "${client_nom}" non trouvé.` });
+    }
+    const clientId = clientResult.rows[0].id;
+
+    const fournisseurResult = await clientDb.query('SELECT id FROM fournisseurs WHERE nom = $1', [fournisseur_nom]);
+    if (fournisseurResult.rows.length === 0) {
+      await clientDb.query('ROLLBACK');
+      return res.status(404).json({ error: `Fournisseur "${fournisseur_nom}" non trouvé.` });
+    }
+    const fournisseurId = fournisseurResult.rows[0].id;
+
+    const parsedPrixVenteClient = parseFloat(prix_vente_client);
+    const parsedPrixAchatFournisseur = parseFloat(prix_achat_fournisseur);
+    const parsedMontantPaye = parseFloat(montant_paye);
+    
+    if (parsedPrixVenteClient <= parsedPrixAchatFournisseur) {
+      await clientDb.query('ROLLBACK');
+      return res.status(400).json({ error: 'Le prix de vente doit être supérieur au prix d\'achat.' });
+    }
+
+    const montantRestant = parsedPrixVenteClient - parsedMontantPaye;
+    
+    const updateQuery = `
+      UPDATE special_orders
+      SET client_id = $1, fournisseur_id = $2, marque = $3, modele = $4, stockage = $5, type = $6, type_carton = $7, imei = $8,
+          prix_achat_fournisseur = $9, prix_vente_client = $10, montant_paye = $11, montant_restant = $12, statut = $13, raison_annulation = $14
+      WHERE id = $15 RETURNING *;
+    `;
+    const result = await clientDb.query(updateQuery, [
+        clientId, fournisseurId, marque, modele, stockage, type, type_carton, imei,
+        parsedPrixAchatFournisseur, parsedPrixVenteClient, parsedMontantPaye, montantRestant, statut, raison_annulation || null, orderId
+    ]);
+
+    if (result.rows.length === 0) {
+      await clientDb.query('ROLLBACK');
+      return res.status(404).json({ error: 'Commande spéciale non trouvée.' });
+    }
+
+    await clientDb.query('COMMIT');
+    res.status(200).json({ message: 'Commande spéciale mise à jour avec succès.', updatedOrder: result.rows[0] });
+
+  } catch (error) {
+    if (clientDb) await clientDb.query('ROLLBACK');
+    console.error('Erreur lors de la mise à jour de la commande spéciale:', error);
+    res.status(500).json({ error: 'Erreur serveur lors de la mise à jour de la commande spéciale.' });
+  } finally {
+    if (clientDb) clientDb.release();
+  }
+});
+
 router.put('/:id/update-status', async (req, res) => {
   const orderId = req.params.id;
   const { statut, raison_annulation } = req.body;
@@ -164,7 +236,6 @@ router.put('/:id/update-status', async (req, res) => {
   }
 });
 
-// NOUVELLE ROUTE : PUT /api/special-orders/:id/update-payment
 router.put('/:id/update-payment', async (req, res) => {
   const orderId = req.params.id;
   const { new_montant_paye } = req.body;
@@ -176,7 +247,7 @@ router.put('/:id/update-payment', async (req, res) => {
     await clientDb.query('BEGIN');
 
     const currentOrderResult = await clientDb.query(
-      'SELECT prix_vente_client, montant_paye FROM special_orders WHERE id = $1 FOR UPDATE',
+      'SELECT prix_vente_client FROM special_orders WHERE id = $1 FOR UPDATE',
       [orderId]
     );
 
@@ -185,7 +256,7 @@ router.put('/:id/update-payment', async (req, res) => {
       return res.status(404).json({ error: 'Commande spéciale non trouvée.' });
     }
 
-    const { prix_vente_client, montant_paye: currentMontantPaye } = currentOrderResult.rows[0];
+    const { prix_vente_client } = currentOrderResult.rows[0];
     const parsedPrixVenteClient = parseFloat(prix_vente_client);
     const parsedNewMontantPaye = parseFloat(new_montant_paye);
 
@@ -221,10 +292,31 @@ router.put('/:id/update-payment', async (req, res) => {
   } catch (error) {
     if (clientDb) await clientDb.query('ROLLBACK');
     console.error('Erreur lors de la mise à jour du paiement de la commande spéciale:', error);
-    res.status(500).json({ error: 'Erreur serveur lors de la mise à jour du paiement de la commande spéciale contacter Derkv 😄.' });
+    res.status(500).json({ error: 'Erreur serveur lors de la mise à jour du paiement de la commande spéciale.' });
   } finally {
     if (clientDb) clientDb.release();
-  }
+    }
+});
+
+router.delete('/:id', async (req, res) => {
+    const orderId = req.params.id;
+    let clientDb;
+
+    try {
+      clientDb = await pool.connect();
+      const result = await clientDb.query('DELETE FROM special_orders WHERE id = $1 RETURNING *', [orderId]);
+  
+      if (result.rowCount === 0) {
+        return res.status(404).json({ error: 'Commande spéciale non trouvée.' });
+      }
+  
+      res.status(200).json({ message: 'Commande spéciale supprimée avec succès.' });
+    } catch (error) {
+      console.error('Erreur lors de la suppression de la commande spéciales:', error);
+      res.status(500).json({ error: 'Erreur serveur lors de la suppression de la commande spéciale.' });
+    } finally {
+      if (clientDb) clientDb.release();
+    }
 });
 
 
