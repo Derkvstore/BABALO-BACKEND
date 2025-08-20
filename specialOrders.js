@@ -17,12 +17,13 @@ router.get('/', async (req, res) => {
           so.imei,
           so.prix_achat_fournisseur,
           so.prix_vente_client,
-          so.montant_paye,        -- NOUVEAU: Montant payé par le client
-          so.montant_restant,     -- NOUVEAU: Montant restant dû
+          so.montant_paye,
+          so.montant_restant,
           so.date_commande,
           so.statut,
           so.raison_annulation,
           so.date_statut_change,
+          so.date_statut_change AS date_vente, -- ➡️ MODIFICATION: Permet au front-end de calculer le bénéfice par date de vente
           c.nom AS client_nom,
           c.telephone AS client_telephone,
           f.nom AS fournisseur_nom
@@ -56,7 +57,7 @@ router.post('/', async (req, res) => {
     imei,
     prix_achat_fournisseur,
     prix_vente_client,
-    montant_paye = 0 // NOUVEAU: Montant payé lors de la création, par défaut 0
+    montant_paye = 0
   } = req.body;
 
   let clientDb;
@@ -94,9 +95,9 @@ router.post('/', async (req, res) => {
     // Déterminer le statut initial de la commande
     let initialStatut = 'en_attente';
     if (parsedMontantPaye >= parsedPrixVenteClient) {
-        initialStatut = 'vendu'; // Si tout est payé dès le début
+        initialStatut = 'vendu';
     } else if (parsedMontantPaye > 0) {
-        initialStatut = 'paiement_partiel'; // Nouveau statut pour paiement partiel
+        initialStatut = 'paiement_partiel';
     }
 
 
@@ -166,7 +167,7 @@ router.put('/:id/update-status', async (req, res) => {
 // NOUVELLE ROUTE : PUT /api/special-orders/:id/update-payment
 router.put('/:id/update-payment', async (req, res) => {
   const orderId = req.params.id;
-  const { new_montant_paye } = req.body; // Seul le nouveau montant payé est envoyé
+  const { new_montant_paye } = req.body;
 
   let clientDb;
 
@@ -174,7 +175,6 @@ router.put('/:id/update-payment', async (req, res) => {
     clientDb = await pool.connect();
     await clientDb.query('BEGIN');
 
-    // Récupérer la commande spéciale actuelle pour son prix de vente et montant payé existant
     const currentOrderResult = await clientDb.query(
       'SELECT prix_vente_client, montant_paye FROM special_orders WHERE id = $1 FOR UPDATE',
       [orderId]
@@ -199,18 +199,15 @@ router.put('/:id/update-payment', async (req, res) => {
       return res.status(400).json({ error: `Le montant payé (${parsedNewMontantPaye}) ne peut pas être supérieur au prix de vente de la commande (${parsedPrixVenteClient}).` });
     }
 
-    // Calculer le nouveau montant restant dû
     const newMontantRestant = parsedPrixVenteClient - parsedNewMontantPaye;
 
-    // Déterminer le nouveau statut basé sur le paiement
     let newStatut = 'paiement_partiel';
     if (parsedNewMontantPaye >= parsedPrixVenteClient) {
-      newStatut = 'vendu'; // Entièrement payé
+      newStatut = 'vendu';
     } else if (parsedNewMontantPaye === 0) {
-      newStatut = 'en_attente'; // Aucun paiement
+      newStatut = 'en_attente';
     }
 
-    // Mettre à jour la commande spéciale avec le nouveau montant payé, le montant restant et le statut
     const updateResult = await clientDb.query(
       `UPDATE special_orders
        SET montant_paye = $1, montant_restant = $2, statut = $3, date_statut_change = NOW()
