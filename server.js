@@ -26,8 +26,6 @@ const allowedOrigins = [
     'http://localhost:5173'
 ];
 
-
-
 // ✅ Middleware CORS propre
 app.use(cors({
   origin: function (origin, callback) {
@@ -64,40 +62,31 @@ app.use('/api/fournisseurs', fournisseursRoutes);
 app.use('/api/factures', facturesRoutes);
 app.use('/api/special-orders', specialOrdersRoutes);
 
-// Route pour les statistiques du tableau de bord (nouvelle)
-app.get('/api/reports/dashboard-stats', async (req, res) => {
+// Route pour les statistiques des commandes spéciales (nouvelle route)
+app.get('/api/special-orders-stats', async (req, res) => {
   try {
-    const [
-      totalCartonsResult,
-      totalArrivageResult,
-      totalVentesResult,
-      totalReturnedResult,
-      totalSentToSupplierResult
-    ] = await Promise.all([
-      pool.query('SELECT COUNT(*) FROM cartons'),
-      pool.query('SELECT COUNT(*) FROM produits'),
-      pool.query('SELECT COUNT(*) FROM ventes'),
-      pool.query('SELECT COUNT(*) FROM retours'),
-      pool.query('SELECT COUNT(*) FROM remplacements')
-    ]);
-
-    const dashboardStats = {
-      totalCartons: parseInt(totalCartonsResult.rows[0].count, 10),
-      totalArrivage: parseInt(totalArrivageResult.rows[0].count, 10),
-      totalVentes: parseInt(totalVentesResult.rows[0].count, 10),
-      totalReturned: parseInt(totalReturnedResult.rows[0].count, 10),
-      totalSentToSupplier: parseInt(totalSentToSupplierResult.rows[0].count, 10)
-    };
-
-    res.json(dashboardStats);
-  } catch (err) {
-    console.error('Erreur lors de la récupération des statistiques du tableau de bord:', err);
-    res.status(500).json({ error: 'Erreur serveur lors de la récupération des statistiques du tableau de bord.' });
+    const statsQuery = `
+      SELECT
+        COUNT(*) FILTER (WHERE statut = 'en_attente') AS total_en_attente,
+        COUNT(*) FILTER (WHERE statut = 'commandé') AS total_commandé,
+        COUNT(*) FILTER (WHERE statut = 'reçu') AS total_reçu,
+        COUNT(*) FILTER (WHERE statut = 'vendu') AS total_vendu,
+        COUNT(*) FILTER (WHERE statut = 'annulé') AS total_annulé,
+        COUNT(*) FILTER (WHERE statut = 'remplacé') AS total_remplacé,
+        COUNT(*) FILTER (WHERE statut = 'paiement_partiel') AS total_paiement_partiel
+      FROM special_orders;
+    `;
+    const statsResult = await pool.query(statsQuery);
+    const stats = statsResult.rows[0];
+    res.status(200).json(stats);
+  } catch (error) {
+    console.error('Erreur lors de la récupération des statistiques des commandes spéciales:', error);
+    res.status(500).json({ error: 'Erreur serveur lors de la récupération des statistiques.' });
   }
 });
 
 
-// Route bénéfices (corrigée)
+// Route bénéfices
 app.get('/api/benefices', async (req, res) => {
   try {
     let query = `
