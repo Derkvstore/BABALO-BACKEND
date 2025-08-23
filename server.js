@@ -21,7 +21,7 @@ const PORT = process.env.PORT || 3001;
 
 // ✅ CORS autorisé pour Railway Front + localhost et ton site Vercel
 const allowedOrigins = [
-     'babalo-backend-production.up.railway.app',
+     'https://babalo-backend-production.up.railway.app',
     'https://applebko.vercel.app',
     'http://localhost:5173'
 ];

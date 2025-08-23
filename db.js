@@ -9,8 +9,9 @@ const pool = new Pool({
   ssl: isProduction ? { rejectUnauthorized: false } : false,
 });
 
-pool.connect()
-  .then(() => console.log('✅ Connexion à la base de données réussie'))
-  .catch(err => console.error('❌ Échec de la connexion à la base de données:', err));
+// Le pool gère la connexion automatiquement, ce bloc de code n'est pas nécessaire
+// pool.connect()
+//   .then(() => console.log('✅ Connexion à la base de données réussie'))
+//   .catch(err => console.error('❌ Échec de la connexion à la base de données:', err));
 
 module.exports = { pool };
